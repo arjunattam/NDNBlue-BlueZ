@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include "ndnld.h"
 
-#define D 1
+#define D 0
 
 NdnlpSvc NdnlpSvc_ctor(CcnLAC lac, Link link, bool rla, int sentPktsCapacity, int retryCount, TimeSpan retransmitTime, TimeSpan acknowledgeTime) {
 	NdnlpSvc self = ALLOCSELF;

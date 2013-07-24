@@ -9,21 +9,22 @@
 #include <bluetooth/sdp_lib.h>
 #include <fcntl.h>
 
-
 #define D 1
+#define RFCOMM_CHANNEL 11
+
+uint8_t service_uuid_int[] = { 0xce, 0x52, 0xcc, 0x20, 0xc2, 0x6e, 0x11, 0xe2, 
+           0x8b, 0x8b, 0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66 };
 
 void usage(char* progname) {
-  printf("usage\n\t%s ccnx:/test server\n\t%s ccnx:/ndntest client E4:CE:8F:38:C2:6B\n\t%s ccnx:/ndntest client 00:11:67:BD:88:12\n", progname, progname, progname);
+  printf("usage\n\t%s ccnx:/test server\n\t%s ccnx:/ndntest client E4:CE:8F:38:C2:6B\n", progname, progname);
 }
 
 sdp_session_t *register_service()
 {
-    uint8_t service_uuid_int[] = { 0xce, 0x52, 0xcc, 0x20, 0xc2, 0x6e, 0x11, 0xe2, 
-			     0x8b, 0x8b, 0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66 };
-    uint8_t rfcomm_channel = 13;
-    const char *service_name = "Roto-Rooter Data Router";
-    const char *service_dsc = "An experimental plumbing router";
-    const char *service_prov = "Roto-Rooter";
+    uint8_t rfcomm_channel = RFCOMM_CHANNEL;
+    const char *service_name = "NDNBlue";
+    const char *service_dsc = "Server for NDN over Bluetooth";
+    const char *service_prov = "NDN";
 
     uuid_t root_uuid, l2cap_uuid, rfcomm_uuid, svc_uuid;
     sdp_list_t *l2cap_list = 0, 
@@ -84,8 +85,6 @@ int discover_sdp(char* remote) {
   int channel = 0;
 
   // returns rfcomm channel
-  uint8_t svc_uuid_int[] = { 0xce, 0x52, 0xcc, 0x20, 0xc2, 0x6e, 0x11, 0xe2, 
-			     0x8b, 0x8b, 0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66 };
   uuid_t svc_uuid;
   int err;
   bdaddr_t target;
@@ -100,7 +99,7 @@ int discover_sdp(char* remote) {
   
   // specify the UUID of the application we're searching for
   if (D) printf("uuid\n");
-  sdp_uuid128_create( &svc_uuid, &svc_uuid_int );
+  sdp_uuid128_create( &svc_uuid, &service_uuid_int );
   search_list = sdp_list_append( NULL, &svc_uuid );
   
   // specify that we want a list of all the matching applications' attributes
@@ -174,12 +173,10 @@ int main(int argc, char* argv[]) {
   CcnCC_pollAttach(cc, pm);
   CcnLAC lac = CcnLAC_ctor();
   CcnLAC_initialize(lac, CcnCC_ccndid(cc), pm);
-  if (D) printf("ccn functions returned\n");
 
   count = 20;
   while (--count > 0 && !CcnLAC_ready(lac)) {
     PollMgr_poll(pm);
-    if (D) printf("%d. Poll returns\n", count);
   }
   if (CcnCC_error(cc) || CcnLAC_error(lac) || !CcnLAC_ready(lac)) return 1;
 
@@ -187,7 +184,6 @@ int main(int argc, char* argv[]) {
   ccn_name_from_uri(prefix, argv[1]);
   CcnH_regPrefix(CcnPrefixOp_register, CcnCC_ccnh(cc), CcnCC_ccndid(cc), CcnLAC_faceid(lac), prefix);
   ccn_charbuf_destroy(&prefix);
-  if (D) printf("Prefix registered on LAC fd: %d\n", ccn_get_connection_fd(lac->ccnh));
 
   Link link;
   if (argc == 3 && strcmp(argv[2], "server") == 0) {
@@ -197,10 +193,9 @@ int main(int argc, char* argv[]) {
     // sdp_close(session);
     socklen_t opt = sizeof(struct sockaddr_rc);
     int sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-    if (D) printf("Bluetooth socket fd: %d\n", sock);
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
     loc_addr.rc_family = AF_BLUETOOTH;
-    loc_addr.rc_channel = (uint8_t) 13;
+    loc_addr.rc_channel = (uint8_t) RFCOMM_CHANNEL;
     loc_addr.rc_bdaddr = *BDADDR_ANY;
     int res = bind(sock, (struct sockaddr*)&loc_addr, sizeof(struct sockaddr_rc));
     if (res != 0) {
@@ -222,7 +217,6 @@ int main(int argc, char* argv[]) {
 
     int sock_flags = fcntl(new_sock, F_GETFL, 0);
     fcntl(new_sock, F_SETFL, sock_flags | O_NONBLOCK);
-    if (D) printf("Flags set\n");
 
     NBS nbs = NBS_ctor(new_sock, new_sock, SockType_Stream);
     NBS_pollAttach(nbs, pm);
@@ -235,7 +229,6 @@ int main(int argc, char* argv[]) {
   } else if (argc == 4 && strcmp(argv[2], "client") == 0) {
     if (D) printf("Client\n");
     int sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-    if (D) printf("Bluetooth socket fd: %d\n", sock);
     struct sockaddr_rc rem_addr = { 0 };
 
     str2ba( argv[3], &rem_addr.rc_bdaddr );
@@ -253,7 +246,6 @@ int main(int argc, char* argv[]) {
 
     int flags = fcntl(sock, F_GETFL, 0);
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-    if (D) printf("Flags set\n");
 
     NBS nbs = NBS_ctor(sock, sock, SockType_Stream);
     NBS_pollAttach(nbs, pm);
@@ -265,12 +257,9 @@ int main(int argc, char* argv[]) {
   }
 
   NdnlpSvc svc = NdnlpSvc_ctor(lac, link, 0, CMPConn_SentPktsCapacity_default, CMPConn_RetryCount_default, CMPConn_RetransmitTime_default, CMPConn_AcknowledgeTime_default);
-  if (D) printf("NdnlpSvc returned\n");
 
   while(true) {
-    if (D) printf("Poll start\n");
     PollMgr_poll(pm);
-    if (D) printf("NdnlpSvc start\n");
     NdnlpSvc_run(svc);
   }
 
