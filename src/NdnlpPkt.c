@@ -3,8 +3,7 @@
 #include <ccn/ccn.h>
 #include "ndnld.h"
 
-#define D 1
-
+#define D 0
 
 int CcnbH_sizeBlockHdr(uint64_t number) {
 	if (number <= 0xF) return 1;
