@@ -1,0 +1,134 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <ccn/ccn.h>
+#include <ccn/uri.h>
+#include "ndnld.h"
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/rfcomm.h>
+#include <bluetooth/sdp.h>
+#include <bluetooth/sdp_lib.h>
+#include <fcntl.h>
+
+
+#define D 1
+
+void usage(char* progname) {
+    printf("usage\n\t%s ccnx:/test server\n\t%s ccnx:/ndntest client E4:CE:8F:38:C2:6B\n\t%s ccnx:/ndntest client 00:11:67:BD:88:12\n", progname, progname, progname);
+}
+
+int main(int argc, char* argv[]) {
+    CapsH_drop();
+    if (argc < 3) {
+        usage(argv[0]);
+        return 9;
+    }
+
+    int count;
+    PollMgr pm = PollMgr_ctor(50);
+    CcnCC cc = CcnCC_ctor();
+    CcnCC_pollAttach(cc, pm);
+    CcnLAC lac = CcnLAC_ctor();
+    CcnLAC_initialize(lac, CcnCC_ccndid(cc), pm);
+    if (D) printf("ccn functions returned\n");
+
+    count = 20;
+    while (--count > 0 && !CcnLAC_ready(lac)) {
+        PollMgr_poll(pm);
+        if (D) printf("%d. Poll returns\n", count);
+    }
+    if (CcnCC_error(cc) || CcnLAC_error(lac) || !CcnLAC_ready(lac)) return 1;
+
+    struct ccn_charbuf* prefix = ccn_charbuf_create();
+    ccn_name_from_uri(prefix, argv[1]);
+    CcnH_regPrefix(CcnPrefixOp_register, CcnCC_ccnh(cc), CcnCC_ccndid(cc), CcnLAC_faceid(lac), prefix);
+    ccn_charbuf_destroy(&prefix);
+    if (D) printf("Prefix registered on LAC fd: %d\n", ccn_get_connection_fd(lac->ccnh));
+
+    Link link;
+    if (argc == 3 && strcmp(argv[2], "server") == 0) {
+        if (D) printf("Server\n");
+        socklen_t opt = sizeof(struct sockaddr_rc);
+        int sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+        if (D) printf("Bluetooth socket fd: %d\n", sock);
+        struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
+        loc_addr.rc_family = AF_BLUETOOTH;
+        loc_addr.rc_channel = (uint8_t) 1;
+        str2ba( "00:11:67:BD:88:12", &loc_addr.rc_bdaddr );
+        int res = bind(sock, (struct sockaddr*)&loc_addr, sizeof(struct sockaddr_rc));
+        if (res != 0) {
+            close(sock);
+            printf("Bind error\n");
+            return 2;
+        }
+        if (D) printf("Bind done\n");
+
+        listen(sock, 1);
+        if (D) printf("Listening...\n");
+
+        int new_sock = accept(sock, (struct sockaddr*)&rem_addr, &opt);
+        if (D) printf("Accepted socket fd: %d\n", new_sock);
+
+        char buf[18] = { 0 };
+        ba2str( &rem_addr.rc_bdaddr, buf );
+        printf("Remote address: %s\n", buf);
+
+        int sock_flags = fcntl(new_sock, F_GETFL, 0);
+        fcntl(new_sock, F_SETFL, sock_flags | O_NONBLOCK);
+        if (D) printf("Flags set\n");
+
+        NBS nbs = NBS_ctor(new_sock, new_sock, SockType_Stream);
+        NBS_pollAttach(nbs, pm);
+        link = Link_ctorStream(nbs);
+        if (!link) {
+            printf("Link error\n");
+            return 3;
+        }
+
+    } else if (argc == 4 && strcmp(argv[2], "client") == 0) {
+        if (D) printf("Client\n");
+        int sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+        if (D) printf("Bluetooth socket fd: %d\n", sock);
+        struct sockaddr_rc rem_addr = { 0 };
+
+        str2ba( argv[3], &rem_addr.rc_bdaddr );
+        rem_addr.rc_family = AF_BLUETOOTH;
+        rem_addr.rc_channel = (uint8_t) 1;
+
+        int res = connect(sock, (struct sockaddr *) &rem_addr, sizeof(struct sockaddr_rc));
+        if (res != 0) {
+            printf("Connect error\n");
+            close(sock);
+            return 4;
+        }
+        printf("Connected\n");
+
+        int flags = fcntl(sock, F_GETFL, 0);
+        fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+        if (D) printf("Flags set\n");
+
+        NBS nbs = NBS_ctor(sock, sock, SockType_Stream);
+        NBS_pollAttach(nbs, pm);
+        link = Link_ctorStream(nbs);
+        if (!link) {
+            printf("Link error\n");
+            return 3;
+        }
+    }
+
+    NdnlpSvc svc = NdnlpSvc_ctor(lac, link, 0, CMPConn_SentPktsCapacity_default, CMPConn_RetryCount_default, CMPConn_RetransmitTime_default, CMPConn_AcknowledgeTime_default);
+    if (D) printf("NdnlpSvc returned\n");
+
+    while(true) {
+        if (D) printf("Poll start\n");
+        PollMgr_poll(pm);
+        if (D) printf("NdnlpSvc start\n");
+        NdnlpSvc_run(svc);
+    }
+
+    Link_dtor(link);
+    CcnCC_pollDetach(cc, pm);
+    CcnCC_dtor(cc);
+    PollMgr_dtor(pm);
+
+    return 0;
+}
