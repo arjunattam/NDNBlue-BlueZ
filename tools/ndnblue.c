@@ -20,7 +20,7 @@ sdp_session_t *register_service()
 {
     uint8_t service_uuid_int[] = { 0xce, 0x52, 0xcc, 0x20, 0xc2, 0x6e, 0x11, 0xe2, 
 			     0x8b, 0x8b, 0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66 };
-    uint8_t rfcomm_channel = 11;
+    uint8_t rfcomm_channel = 13;
     const char *service_name = "Roto-Rooter Data Router";
     const char *service_dsc = "An experimental plumbing router";
     const char *service_prov = "Roto-Rooter";
@@ -193,12 +193,14 @@ int main(int argc, char* argv[]) {
   if (argc == 3 && strcmp(argv[2], "server") == 0) {
     if (D) printf("Server\n");
      sdp_session_t* session = register_service();
+    sleep(10);
+    sdp_close(session);
     socklen_t opt = sizeof(struct sockaddr_rc);
     int sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
     if (D) printf("Bluetooth socket fd: %d\n", sock);
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
     loc_addr.rc_family = AF_BLUETOOTH;
-    loc_addr.rc_channel = (uint8_t) 11;
+    loc_addr.rc_channel = (uint8_t) 13;
     str2ba( "00:11:67:BD:88:12", &loc_addr.rc_bdaddr );
     int res = bind(sock, (struct sockaddr*)&loc_addr, sizeof(struct sockaddr_rc));
     if (res != 0) {
@@ -213,8 +215,6 @@ int main(int argc, char* argv[]) {
 
     int new_sock = accept(sock, (struct sockaddr*)&rem_addr, &opt);
     if (D) printf("Accepted socket fd: %d\n", new_sock);
-
-     sdp_close(session);
 
     char buf[18] = { 0 };
     ba2str( &rem_addr.rc_bdaddr, buf );
