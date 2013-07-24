@@ -192,16 +192,16 @@ int main(int argc, char* argv[]) {
   Link link;
   if (argc == 3 && strcmp(argv[2], "server") == 0) {
     if (D) printf("Server\n");
-     sdp_session_t* session = register_service();
-    sleep(10);
-    sdp_close(session);
+    // sdp_session_t* session = register_service();
+    // sleep(10);
+    // sdp_close(session);
     socklen_t opt = sizeof(struct sockaddr_rc);
     int sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
     if (D) printf("Bluetooth socket fd: %d\n", sock);
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
     loc_addr.rc_family = AF_BLUETOOTH;
     loc_addr.rc_channel = (uint8_t) 13;
-    str2ba( "00:11:67:BD:88:12", &loc_addr.rc_bdaddr );
+    loc_addr.rc_bdaddr = *BDADDR_ANY;
     int res = bind(sock, (struct sockaddr*)&loc_addr, sizeof(struct sockaddr_rc));
     if (res != 0) {
       close(sock);
@@ -240,7 +240,8 @@ int main(int argc, char* argv[]) {
 
     str2ba( argv[3], &rem_addr.rc_bdaddr );
     rem_addr.rc_family = AF_BLUETOOTH;
-    rem_addr.rc_channel = discover_sdp( argv[3] );
+    // rem_addr.rc_channel = discover_sdp( argv[3] );
+    rem_addr.rc_channel = 13;
 
     int res = connect(sock, (struct sockaddr *) &rem_addr, sizeof(struct sockaddr_rc));
     if (res != 0) {
