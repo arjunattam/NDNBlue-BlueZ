@@ -2,12 +2,12 @@
 #include <stdio.h>
 #include <ccn/ccn.h>
 #include <ccn/uri.h>
-#include "ndnld.h"
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 #include <bluetooth/sdp.h>
 #include <bluetooth/sdp_lib.h>
 #include <fcntl.h>
+#include "ndnld.h"
 
 #define D 1
 #define RFCOMM_CHANNEL 11

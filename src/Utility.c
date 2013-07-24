@@ -15,7 +15,7 @@
 #include <ifaddrs.h>
 #include "ndnld.h"
 
-#define D 1
+#define D 0
 
 void* ByteArray_clone(void* src, size_t len) {
     void* dst = malloc(len);
