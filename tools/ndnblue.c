@@ -198,7 +198,7 @@ int main(int argc, char* argv[]) {
     if (D) printf("Bluetooth socket fd: %d\n", sock);
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
     loc_addr.rc_family = AF_BLUETOOTH;
-    loc_addr.rc_channel = (uint8_t) 1;
+    loc_addr.rc_channel = (uint8_t) 11;
     str2ba( "00:11:67:BD:88:12", &loc_addr.rc_bdaddr );
     int res = bind(sock, (struct sockaddr*)&loc_addr, sizeof(struct sockaddr_rc));
     if (res != 0) {
